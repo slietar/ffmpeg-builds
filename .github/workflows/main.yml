@@ -1,0 +1,54 @@
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout FFmpeg repository
+        uses: actions/checkout@v5
+        with:
+          path: source
+          repository: FFmpeg/FFmpeg
+          ref: n8.0
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install --yes \
+            build-essential \
+            cmake \
+            meson \
+            nasm \
+            ninja-build \
+            yasm
+      - name: Build FFmpeg
+        run: |
+          ./configure \
+            --prefix=$OUTPUT_DIR \
+            --pkg-config-flags="--static" \
+            --extra-cflags="-I$OUTPUT_DIR/include" \
+            --extra-ldflags="-L$OUTPUT_DIR/lib" \
+            --extra-libs="-lpthread -lm" \
+            --bindir="$OUTPUT_DIR/bin" \
+            --disable-doc \
+            --disable-everything \
+            --enable-shared
+          make --jobs $(nproc)
+          make install
+        env:
+          OUTPUT_DIR: ${{ github.workspace }}/output
+        working-directory: source
+      - name: Print output
+        run: tree output
+      - name: Verify installation
+        run: |
+          ./output/bin/ffmpeg -codecs
+          ./output/bin/ffmpeg -formats
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/output/lib
+      - name: Archive binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-binaries-standalone
+          path: |
+            output/bin
+            output/lib
